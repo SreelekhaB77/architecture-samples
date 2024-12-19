@@ -1,0 +1,53 @@
+name: Build APK and Upload to S3
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      
+
+      - name: Verify Java Version
+        run: java -version
+
+      - name: Build APK
+        run: |
+          cd ${{ github.workspace }}
+          ./gradlew assembleRelease
+
+      - name: Install AWS CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y awscli
+
+      - name: Locate APK File
+        id: find-apk
+        run: |
+          APK_FILE=$(find $PWD/app/build/outputs/apk -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "Error: No APK file found!"
+            exit 1
+          fi
+          echo "APK_PATH=$APK_FILE" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Debug APK Path
+        run: |
+          echo "Located APK Path: $APK_PATH"
+          ls -l "$(dirname "$APK_PATH")"
+
+      - name: Upload APK to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+        run: |
+          aws s3 cp "$APK_PATH" s3://apkbucket1/android-apks/ --region $AWS_REGION
